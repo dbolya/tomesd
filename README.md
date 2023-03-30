@@ -27,19 +27,19 @@ _[ICLR '23 Oral (Top 5%)](https://openreview.net/forum?id=JroZRaRw7Eu)_ | _[GitH
 
 Token Merging (**ToMe**) speeds up transformers by _merging redundant tokens_, which means the transformer has to do _less work_. We apply this to the underlying transformer blocks in Stable Diffusion in a clever way that minimizes quality loss while keeping most of the speed-up and memory benefits. ToMe for SD _doesn't_ require training and should work out of the box for any Stable Diffusion model.
 
-**Note:** this is a lossy process, so the image _will_ change, ideally not by much. Here are results with [FID](https://github.com/mseitzer/pytorch-fid) scores vs. time and memory usage (lower is better) when using Stable Diffusion v1.5 to generate images of ImageNet-1k classes on a 4090 GPU:
+**Note:** this is a lossy process, so the image _will_ change, ideally not by much. Here are results with [FID](https://github.com/mseitzer/pytorch-fid) scores vs. time and memory usage (lower is better) when using Stable Diffusion v1.5 to generate 512x512 images of ImageNet-1k classes on a 4090 GPU with 50 PLMS steps using fp16:
 
 | Method                      | r% | FID ↓  | Time (s/im) ↓            | Memory (GB/im) ↓        |
 |-----------------------------|----|:------|:--------------------------|:------------------------|
 | Baseline _(Original Model)_ | 0  | 33.12 | 3.09                      | 3.41                    |
-| **ToMe for SD** _(Ours)_    | 10 | 32.86 | 2.56 (**1.21x** _faster_) | 2.99 (**1.14x** _less_) |
+| w/ **ToMe for SD**        | 10 | 32.86 | 2.56 (**1.21x** _faster_) | 2.99 (**1.14x** _less_) |
 |                             | 20 | 32.86 | 2.29 (**1.35x** _faster_) | 2.17 (**1.57x** _less_) |
 |                             | 30 | 32.80 | 2.06 (**1.50x** _faster_) | 1.71 (**1.99x** _less_) |
 |                             | 40 | 32.87 | 1.85 (**1.67x** _faster_) | 1.26 (**2.71x** _less_) |
 |                             | 50 | 33.02 | 1.65 (**1.87x** _faster_) | 0.89 (**3.83x** _less_) |
 |                             | 60 | 33.37 | 1.52 (**2.03x** _faster_) | 0.60 (**5.68x** _less_) |
 
-Even with most of the tokens merged (60%!), ToMe for SD still produces images close to the originals, while being _**2x** faster_ and using _**~5.7x** less memory_. Moreover, ToMe _reduces_ the work necessary, so it can function _in conjunction_ with efficient implementations (see [Usage](#usage)).
+Even with more than half of the tokens merged (60%!), ToMe for SD still produces images close to the originals, while being _**2x** faster_ and using _**~5.7x** less memory_. Moreover, ToMe is not another efficient reimplementation of transformer modules. Instead, it actually _reduces_ the total work necessary to generate an image, so it can function _in conjunction_ with efficient implementations (see [Usage](#tome--xformers--flash-attn--torch-20)).
 
 ## News
 
@@ -92,12 +92,13 @@ See above for what speeds and memory savings you can expect with different ratio
 If you want to remove the patch later, simply use `tomesd.remove_patch(model)`.
 
 ### Example
-To apply ToMe to the txt2img script of SDv2 for instance, add the following to [this line](https://github.com/Stability-AI/stablediffusion/blob/fc1488421a2761937b9d54784194157882cbc3b1/scripts/txt2img.py#L220):
+To apply ToMe to the txt2img script of SDv2 or SDv1 for instance, add the following to [this line](https://github.com/Stability-AI/stablediffusion/blob/fc1488421a2761937b9d54784194157882cbc3b1/scripts/txt2img.py#L220) (SDv2) or [this line](https://github.com/runwayml/stable-diffusion/blob/08ab4d326c96854026c4eb3454cd3b02109ee982/scripts/txt2img.py#L241) (SDv1):
 ```py
 import tomesd
 tomesd.apply_patch(model, ratio=0.5)
 ```
-That's it! More examples and demos coming soon (_hopefully_).
+That's it! More examples and demos coming soon (_hopefully_).  
+**Note:** You may not see the full speed-up for the first image generated (as pytorch sets up the graph). Since ToMe for SD uses random processes, you might need to set the seed every batch if you want consistent results.
 
 ### ToMe + xFormers / flash attn / torch 2.0
 Since ToMe only affects the forward function of the block, it should support most efficient transformer implementations out of the box. Just apply the patch as normal!
@@ -113,6 +114,15 @@ If you use ToMe for SD or this codebase in your work, please cite:
   title={Token Merging for Fast Stable Diffusion},
   author={Bolya, Daniel and Hoffman, Judy},
   journal={arXiv},
+  year={2023}
+}
+```
+If you use ToMe in general please cite the original work:
+```
+@inproceedings{bolya2023tome,
+  title={Token Merging: Your {ViT} but Faster},
+  author={Bolya, Daniel and Fu, Cheng-Yang and Dai, Xiaoliang and Zhang, Peizhao and Feichtenhofer, Christoph and Hoffman, Judy},
+  booktitle={International Conference on Learning Representations},
   year={2023}
 }
 ```
