@@ -97,6 +97,17 @@ To apply ToMe to the txt2img script of SDv2 or SDv1 for instance, add the follow
 import tomesd
 tomesd.apply_patch(model, ratio=0.5)
 ```
+
+### Using Diffusers
+To use a model from diffusers, you can simply pass a flag to `apply_patch` and load the model from the diffusers library.
+```py
+import tomesd
+from diffusers import StableDiffusionPipeline
+
+pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", torch_dtype=torch.float16)
+tomesd.apply_patch(pipe.unet, ratio=0.5, is_diffuers=True)
+```
+
 That's it! More examples and demos coming soon (_hopefully_).  
 **Note:** You may not see the full speed-up for the first image generated (as pytorch sets up the graph). Since ToMe for SD uses random processes, you might need to set the seed every batch if you want consistent results.
 
