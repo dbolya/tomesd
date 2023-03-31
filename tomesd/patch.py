@@ -84,6 +84,7 @@ def apply_patch(
         ratio: float = 0.5,
         max_downsample: int = 1,
         sx: int = 2, sy: int = 2,
+        is_diffusers: bool = False,
         use_rand: bool = True,
         merge_attn: bool = True,
         merge_crossattn: bool = False,
@@ -104,6 +105,7 @@ def apply_patch(
                                        8 applies to all layers (15/15). I recommend a value of 1 or 2.
      - sx, sy: The stride for computing dst sets (see paper). A higher stride means you can merge more tokens,
                but the default of (2, 2) works well in most cases. Must divide the image size.
+     - is_diffusers: Use a model from the diffusers library.
      - use_rand: Whether or not to allow random perturbations when computing dst sets (see paper). Usually
                  you'd want to leave this on, but if you're having weird artifacts try turning this off.
      - merge_attn: Whether or not to merge tokens for attention (recommended).
@@ -114,11 +116,15 @@ def apply_patch(
     # Make sure the module is not currently patched
     remove_patch(model)
 
-    if not hasattr(model, "model") or not hasattr(model.model, "diffusion_model"):
-        # Provided model not supported
-        raise RuntimeError("Provided model was not a Stable Diffusion / Latent Diffusion model, as expected.")
+    if not is_diffusers:
+        if not hasattr(model, "model") or not hasattr(model.model, "diffusion_model"):
+            # Provided model not supported
+            raise RuntimeError("Provided model was not a Stable Diffusion / Latent Diffusion model, as expected.")
 
-    diffusion_model = model.model.diffusion_model
+        diffusion_model = model.model.diffusion_model
+    else:
+        diffusion_model = model
+        
     diffusion_model._tome_info = { "size": None, }
     diffusion_model.__class__ = make_tome_model(diffusion_model.__class__)
 
