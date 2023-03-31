@@ -5,9 +5,9 @@ Using nothing but pure python and pytorch, ToMe for SD speeds up diffusion by me
 ![ToMe for SD applied on a 2048x2048 image.](examples/assets/teaser.jpg)
 
 This is the official implementation of **ToMe for SD** from our short paper:  
-**[Token Merging for Fast Stable Diffusion](https://arxiv.org/abs/TODO)**  
+**[Token Merging for Fast Stable Diffusion](https://arxiv.org/abs/2303.17604)**  
 [Daniel Bolya](https://dbolya.github.io), [Judy Hoffman](https://faculty.cc.gatech.edu/~judy/)  
-_[GitHub](https://github.com/dbolya/tomesd)_ | _[arXiv](https://arxiv.org/abs/TODO)_ | _[BibTeX](#citation)_
+_[GitHub](https://github.com/dbolya/tomesd)_ | _[arXiv](https://arxiv.org/abs/2303.17604)_ | _[BibTeX](#citation)_
 
 ToMe for SD is an extension of the original **ToMe**:  
 **[Token Merging: Your ViT but Faster](https://arxiv.org/abs/2210.09461)**  
@@ -100,7 +100,7 @@ tomesd.apply_patch(model, ratio=0.5)
 That's it! More examples and demos coming soon (_hopefully_).  
 **Note:** You may not see the full speed-up for the first image generated (as pytorch sets up the graph). Since ToMe for SD uses random processes, you might need to set the seed every batch if you want consistent results.
 
-### ToMe + xFormers / flash attn / torch 2.0
+### ToMe + xformers / flash attn / torch 2.0
 Since ToMe only affects the forward function of the block, it should support most efficient transformer implementations out of the box. Just apply the patch as normal!
 
 **Note:** when testing with xFormers, I observed the most speed-up with ToMe when using _big_ images (i.e., 2048x2048 in the parrot example above). You can get even more speed-up with more aggressive merging configs, but quality obviously suffers. For the result above, I had each method img2img from the same 512x512 res image (i.e., I only applied ToMe during the second pass of "high res fix") and used the default config with 60% merging. Also, the memory benefits didn't stack with xFormers (efficient attention already takes care of memory concerns).
