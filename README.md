@@ -105,7 +105,7 @@ import tomesd
 from diffusers import StableDiffusionPipeline
 
 pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", torch_dtype=torch.float16)
-tomesd.apply_patch(pipe.unet, ratio=0.5, is_diffuers=True)
+tomesd.apply_patch(pipe.unet, ratio=0.5, is_diffusers=True)
 ```
 
 That's it! More examples and demos coming soon (_hopefully_).  
