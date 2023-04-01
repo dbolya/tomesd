@@ -1,19 +1,40 @@
 import torch
 import math
-from typing import Type
+from typing import Type, Dict, Any, Tuple, Callable
 
 from . import merge
 from .utils import isinstance_str
 
 
-def make_tome_block(
-        block_class: Type[torch.nn.Module],
-        ratio: float,
-        max_downsample: int,
-        merge_attn: bool,
-        merge_crossattn: bool,
-        merge_mlp: bool,
-        sx: int, sy: int, no_rand: bool) -> Type[torch.nn.Module]:
+
+def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable, ...]:
+    original_h, original_w = tome_info["size"]
+    original_tokens = original_h * original_w
+    downsample = int(math.ceil(math.sqrt(original_tokens // x.shape[1])))
+
+    args = tome_info["args"]
+
+    if downsample <= args["max_downsample"]:
+        w = original_w // downsample
+        h = original_h // downsample
+        r = int(x.shape[1] * args["ratio"])
+        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, not args["use_rand"])
+    else:
+        m, u = (merge.do_nothing, merge.do_nothing)
+
+    m_a, u_a = (m, u) if args["merge_attn"]      else (merge.do_nothing, merge.do_nothing)
+    m_c, u_c = (m, u) if args["merge_crossattn"] else (merge.do_nothing, merge.do_nothing)
+    m_m, u_m = (m, u) if args["merge_mlp"]       else (merge.do_nothing, merge.do_nothing)
+
+    return m_a, m_c, m_m, u_a, u_c, u_m  # Okay this is probably not very good
+
+
+
+
+
+
+
+def make_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]:
     """
     Make a patched class on the fly so we don't have to import any specific modules.
     This patch applies ToMe to the forward function of the block.
@@ -24,21 +45,7 @@ def make_tome_block(
         _parent = block_class
 
         def _forward(self, x: torch.Tensor, context: torch.Tensor = None) -> torch.Tensor:
-            original_h, original_w = self._tome_info["size"]
-            original_tokens = original_h * original_w
-            downsample = int(math.ceil(math.sqrt(original_tokens // x.shape[1])))
-
-            if downsample <= max_downsample:
-                w = original_w // downsample
-                h = original_h // downsample
-                r = int(x.shape[1] * ratio)
-                m, u = merge.bipartite_soft_matching_random2d(x, w, h, sx, sy, r, no_rand)
-            else:
-                m, u = (merge.do_nothing, merge.do_nothing)
-
-            m_a, u_a = (m, u) if merge_attn      else (merge.do_nothing, merge.do_nothing)
-            m_c, u_c = (m, u) if merge_crossattn else (merge.do_nothing, merge.do_nothing)
-            m_m, u_m = (m, u) if merge_mlp       else (merge.do_nothing, merge.do_nothing)
+            m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(x, self._tome_info)
 
             # This is where the meat of the computation happens
             x = u_a(self.attn1(m_a(self.norm1(x)), context=context if self.disable_self_attn else None)) + x
@@ -53,9 +60,7 @@ def make_tome_block(
 
 
 
-
-
-def make_tome_model(model_class):
+def make_tome_model(model_class: Type[torch.nn.Module]):
     """
     Make a patched class on the fly so we don't have to import any specific modules.
     
@@ -123,17 +128,24 @@ def apply_patch(
         raise RuntimeError("Provided model was not a Stable Diffusion / Latent Diffusion model, as expected.")
 
     diffusion_model = model.model.diffusion_model
-    diffusion_model._tome_info = { "size": None, }
+    diffusion_model._tome_info = {
+        "size": None,
+        "args": {
+            "ratio": ratio,
+            "max_downsample": max_downsample,
+            "sx": sx, "sy": sy,
+            "use_rand": use_rand,
+            "merge_attn": merge_attn,
+            "merge_crossattn": merge_crossattn,
+            "merge_mlp": merge_mlp
+        }
+    }
     diffusion_model.__class__ = make_tome_model(diffusion_model.__class__)
 
     for _, module in diffusion_model.named_modules():
         # If for some reason this has a different name, create an issue and I'll fix it
         if isinstance_str(module, "BasicTransformerBlock"):
-            module.__class__ = make_tome_block(
-                module.__class__, ratio, max_downsample,
-                merge_attn, merge_crossattn, merge_mlp,
-                sx, sy, not use_rand
-            )
+            module.__class__ = make_tome_block(module.__class__)
             module._tome_info = diffusion_model._tome_info
 
             # Something introduced in SD 2.0
