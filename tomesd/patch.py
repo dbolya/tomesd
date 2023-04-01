@@ -26,7 +26,7 @@ def make_tome_block(
         def _forward(self, x: torch.Tensor, context: torch.Tensor = None) -> torch.Tensor:
             original_h, original_w = self._tome_info["size"]
             original_tokens = original_h * original_w
-            downsample = int(math.sqrt(original_tokens // x.shape[1]))
+            downsample = int(math.ceil(math.sqrt(original_tokens // x.shape[1])))
 
             if downsample <= max_downsample:
                 w = original_w // downsample
@@ -48,6 +48,10 @@ def make_tome_block(
             return x
     
     return ToMeBlock
+
+
+
+
 
 
 
@@ -103,7 +107,7 @@ def apply_patch(
                                        E.g., 1 only applies to layers with no downsampling (4/15) while
                                        8 applies to all layers (15/15). I recommend a value of 1 or 2.
      - sx, sy: The stride for computing dst sets (see paper). A higher stride means you can merge more tokens,
-               but the default of (2, 2) works well in most cases. Must divide the image size.
+               but the default of (2, 2) works well in most cases. Doesn't have to divide image size.
      - use_rand: Whether or not to allow random perturbations when computing dst sets (see paper). Usually
                  you'd want to leave this on, but if you're having weird artifacts try turning this off.
      - merge_attn: Whether or not to merge tokens for attention (recommended).

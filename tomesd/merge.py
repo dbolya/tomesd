@@ -32,18 +32,31 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
         hsy, wsx = h // sy, w // sx
 
         # For each sy by sx kernel, randomly assign one token to be dst and the rest src
-        idx_buffer = torch.zeros(1, hsy, wsx, sy*sx, 1, device=metric.device)
-
         if no_rand:
-            rand_idx = torch.zeros(1, hsy, wsx, 1, 1, device=metric.device, dtype=torch.int64)
+            rand_idx = torch.zeros(hsy, wsx, 1, device=metric.device, dtype=torch.int64)
         else:
-            rand_idx = torch.randint(sy*sx, size=(1, hsy, wsx, 1, 1), device=metric.device)
+            rand_idx = torch.randint(sy*sx, size=(hsy, wsx, 1), device=metric.device)
         
-        idx_buffer.scatter_(dim=3, index=rand_idx, src=-torch.ones_like(rand_idx, dtype=idx_buffer.dtype))
-        idx_buffer = idx_buffer.view(1, hsy, wsx, sy, sx, 1).transpose(2, 3).reshape(1, N, 1)
-        rand_idx   = idx_buffer.argsort(dim=1)
+        # The image might not divide sx and sy, so we need to work on a view of the top left if the idx buffer instead
+        idx_buffer_view = torch.zeros(hsy, wsx, sy*sx, device=metric.device, dtype=torch.int64)
+        idx_buffer_view.scatter_(dim=2, index=rand_idx, src=-torch.ones_like(rand_idx, dtype=rand_idx.dtype))
+        idx_buffer_view = idx_buffer_view.view(hsy, wsx, sy, sx).transpose(1, 2).reshape(hsy * sy, wsx * sx)
 
-        num_dst = int((1 / (sx*sy)) * N)
+        # Image is not divisible by sx or sy so we need to move it into a new buffer
+        if (hsy * sy) < h or (wsx * sx) < w:
+            idx_buffer = torch.zeros(h, w, device=metric.device, dtype=torch.int64)
+            idx_buffer[:(hsy * sy), :(wsx * sx)] = idx_buffer_view
+        else:
+            idx_buffer = idx_buffer_view
+
+        # We set dst tokens to be -1 and src to be 0, so an argsort gives us dst|src indices
+        rand_idx = idx_buffer.reshape(1, -1, 1).argsort(dim=1)
+
+        # We're finished with these
+        del idx_buffer, idx_buffer_view
+
+        # rand_idx is currently dst|src, so split them
+        num_dst = hsy * wsx
         a_idx = rand_idx[:, num_dst:, :] # src
         b_idx = rand_idx[:, :num_dst, :] # dst
 
@@ -53,6 +66,7 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
             dst = x.gather(dim=1, index=b_idx.expand(B, num_dst, C))
             return src, dst
 
+        # Cosine similarity between A and B
         metric = metric / metric.norm(dim=-1, keepdim=True)
         a, b = split(metric)
         scores = a @ b.transpose(-1, -2)
@@ -60,6 +74,7 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
         # Can't reduce more than the # tokens in src
         r = min(a.shape[1], r)
 
+        # Find the most similar greedily
         node_max, node_idx = scores.max(dim=-1)
         edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
 

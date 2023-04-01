@@ -45,6 +45,8 @@ Even with more than half of the tokens merged (60%!), ToMe for SD still produces
 
  - **[2023.03.30]** Initial release.
 
+See the [changelog](CHANGELOG.md) for more details.
+
 
 ## Supported Environments
 
