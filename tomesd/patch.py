@@ -56,9 +56,14 @@ def make_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]
     
     return ToMeBlock
 
+
+
+
+
+
 def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]:
     """
-    Make a patched class on the fly so we don't have to import any specific modules.
+    Make a patched class for a diffusers model.
     This patch applies ToMe to the forward function of the block.
     """
     class ToMeBlock(block_class):
@@ -110,8 +115,6 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
                 )
                 # (4) ToMe m_c
                 norm_hidden_states = m_c(norm_hidden_states)
-                # TODO (Birch-San): Here we should prepare the encoder_attention mask correctly
-                # prepare attention mask here
 
                 # 2. Cross-Attention
                 attn_output = self.attn2(
@@ -143,6 +146,9 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
             return hidden_states
 
     return ToMeBlock
+
+
+
 
 
 
@@ -217,7 +223,7 @@ def apply_patch(
             raise RuntimeError("Provided model was not a Stable Diffusion / Latent Diffusion model, as expected.")
         diffusion_model = model.model.diffusion_model
     else:
-        # support "pipe.unet" and "unet"
+        # Supports "pipe.unet" and "unet"
         diffusion_model = model.unet if hasattr(model, "unet") else model
 
     diffusion_model._tome_info = {
@@ -241,11 +247,9 @@ def apply_patch(
             module.__class__ = make_tome_block_fn(module.__class__)
             module._tome_info = diffusion_model._tome_info
 
-            # diffusers not need this
-            if not is_diffusers:
-                # Something introduced in SD 2.0
-                if not hasattr(module, "disable_self_attn"):
-                    module.disable_self_attn = False
+            # Something introduced in SD 2.0 (LDM only)
+            if not hasattr(module, "disable_self_attn") and not is_diffusers:
+                module.disable_self_attn = False
 
     return model
 
@@ -254,8 +258,8 @@ def apply_patch(
 
 
 def remove_patch(model: torch.nn.Module):
-    """ Removes a patch from a ToMe Diffusion module if it was already patched. """\
-
+    """ Removes a patch from a ToMe Diffusion module if it was already patched. """
+    # For diffusers
     model = model.unet if hasattr(model, "unet") else model
 
     for _, module in model.named_modules():

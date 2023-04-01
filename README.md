@@ -42,7 +42,7 @@ Token Merging (**ToMe**) speeds up transformers by _merging redundant tokens_, w
 Even with more than half of the tokens merged (60%!), ToMe for SD still produces images close to the originals, while being _**2x** faster_ and using _**~5.7x** less memory_. Moreover, ToMe is not another efficient reimplementation of transformer modules. Instead, it actually _reduces_ the total work necessary to generate an image, so it can function _in conjunction_ with efficient implementations (see [Usage](#tome--xformers--flash-attn--torch-20)).
 
 ## News
-
+ - **[2023.03.31]** ToMe for SD now supports [Diffusers](https://github.com/huggingface/diffusers). Thanks @JunnYu and @ExponentialML!
  - **[2023.03.30]** Initial release.
 
 See the [changelog](CHANGELOG.md) for more details.
@@ -54,6 +54,7 @@ This repo includes code to patch an existing Stable Diffusion environment. Curre
  - [x] [Stable Diffusion v2](https://github.com/Stability-AI/stablediffusion)
  - [x] [Stable Diffusion v1](https://github.com/runwayml/stable-diffusion)
  - [x] [Latent Diffusion](https://github.com/CompVis/latent-diffusion)
+ - [x] [Diffusers](https://github.com/huggingface/diffusers)
  - [ ] And potentially others
 
 **Note:** This also supports most downstream UIs that use these repositories.
@@ -93,24 +94,6 @@ tomesd.apply_patch(model, ratio=0.9, sx=4, sy=4, max_downsample=2) # Extreme mer
 See above for what speeds and memory savings you can expect with different ratios.
 If you want to remove the patch later, simply use `tomesd.remove_patch(model)`.
 
-Apply ToMe for SD to 🤗 Diffusers Stable Diffusion model with
-```py
-import torch
-import tomesd
-# pip install diffusers==0.14.0
-from diffusers import StableDiffusionPipeline
-pipe = StableDiffusionPipeline.from_pretrained("CompVis-stable-diffusion-v1-4", torch_dtype=torch.float16)
-pipe.to("cuda")
-# Patch a Diffusers Pipeline with ToMe for SD using a 50% merging ratio.
-tomesd.apply_patch(pipe, ratio=0.5)
-# or Patch a Diffusers Unet with ToMe for SD using a 50% merging ratio.
-# tomesd.apply_patch(pipe.unet, ratio=0.5)
-image = pipe("a photo of an astronaut riding a horse on mars", guidance_scale=7.5, height=512, width=512, num_inference_steps=50).images[0]
-image.save("astronaut.png")
-```
-See above for what speeds and memory savings you can expect with different ratios.
-If you want to remove the patch later, simply use `tomesd.remove_patch(pipe)`.
-
 ### Example
 To apply ToMe to the txt2img script of SDv2 or SDv1 for instance, add the following to [this line](https://github.com/Stability-AI/stablediffusion/blob/fc1488421a2761937b9d54784194157882cbc3b1/scripts/txt2img.py#L220) (SDv2) or [this line](https://github.com/runwayml/stable-diffusion/blob/08ab4d326c96854026c4eb3454cd3b02109ee982/scripts/txt2img.py#L241) (SDv1):
 ```py
@@ -119,6 +102,22 @@ tomesd.apply_patch(model, ratio=0.5)
 ```
 That's it! More examples and demos coming soon (_hopefully_).  
 **Note:** You may not see the full speed-up for the first image generated (as pytorch sets up the graph). Since ToMe for SD uses random processes, you might need to set the seed every batch if you want consistent results.
+
+### Diffusers
+ToMe can also be used to patch a 🤗 Diffusers Stable Diffusion pipeline:
+```py
+import torch, tomesd
+from diffusers import StableDiffusionPipeline
+
+pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", torch_dtype=torch.float16).to("cuda")
+
+# Apply ToMe with a 50% merging ratio
+tomesd.apply_patch(pipe, ratio=0.5) # Can also use pipe.unet in place of pipe here
+
+image = pipe("a photo of an astronaut riding a horse on mars").images[0]
+image.save("astronaut.png")
+```
+You can remove the patch with `tomesd.remove_patch(pipe)`.
 
 ### ToMe + xformers / flash attn / torch 2.0
 Since ToMe only affects the forward function of the block, it should support most efficient transformer implementations out of the box. Just apply the patch as normal!
