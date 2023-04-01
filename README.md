@@ -1,4 +1,12 @@
 # Token Merging for Stable Diffusion
+This was forked from [the original repository](https://github.com/dbolya/tomesd) to be uploadable to Pypi
+
+## Installation
+```
+pip install tomesd
+```
+
+------------------
 
 Using nothing but pure python and pytorch, ToMe for SD speeds up diffusion by merging _redundant_ tokens.
 
