@@ -15,8 +15,8 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
     args = tome_info["args"]
 
     if downsample <= args["max_downsample"]:
-        w = original_w // downsample
-        h = original_h // downsample
+        w = int(math.ceil(original_w / downsample))
+        h = int(math.ceil(original_h / downsample))
         r = int(x.shape[1] * args["ratio"])
         m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, not args["use_rand"])
     else:
