@@ -152,26 +152,13 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
 
 
 
-def make_tome_model(model_class: Type[torch.nn.Module]):
-    """
-    Make a patched class on the fly so we don't have to import any specific modules.
-    
-    This patches the forward function of the model only to get the current image size.
-    Probably would be better off finding a way to get the size some other way.
-    """
+def hook_tome_model(model: torch.nn.Module):
+    """ Adds a forward pre hook to get the image size. This hook can be removed with remove_patch. """
+    def hook(module, args):
+        module._tome_info["size"] = (args[0].shape[2], args[0].shape[3])
+        return None
 
-    if model_class.__name__ == "ToMeDiffusionModel":
-        model_class = model_class._parent
-    
-    class ToMeDiffusionModel(model_class):
-        # Save for later
-        _parent = model_class
-
-        def forward(self, *args, **kwdargs):
-            self._tome_info["size"] = (args[0].shape[2], args[0].shape[3])
-            return super().forward(*args, **kwdargs)
-
-    return ToMeDiffusionModel
+    model._tome_info["hooks"].append(model.register_forward_pre_hook(hook))
 
 
 
@@ -228,6 +215,7 @@ def apply_patch(
 
     diffusion_model._tome_info = {
         "size": None,
+        "hooks": [],
         "args": {
             "ratio": ratio,
             "max_downsample": max_downsample,
@@ -238,7 +226,7 @@ def apply_patch(
             "merge_mlp": merge_mlp
         }
     }
-    diffusion_model.__class__ = make_tome_model(diffusion_model.__class__)
+    hook_tome_model(diffusion_model)
 
     for _, module in diffusion_model.named_modules():
         # If for some reason this has a different name, create an issue and I'll fix it
@@ -263,9 +251,12 @@ def remove_patch(model: torch.nn.Module):
     model = model.unet if hasattr(model, "unet") else model
 
     for _, module in model.named_modules():
+        if hasattr(module, "_tome_info"):
+            for hook in module._tome_info["hooks"]:
+                hook.remove()
+            module._tome_info["hooks"].clear()
+
         if module.__class__.__name__ == "ToMeBlock":
-            module.__class__ = module._parent
-        elif module.__class__.__name__ == "ToMeDiffusionModel":
             module.__class__ = module._parent
     
     return model
