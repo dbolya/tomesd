@@ -42,7 +42,7 @@ Token Merging (**ToMe**) speeds up transformers by _merging redundant tokens_, w
 Even with more than half of the tokens merged (60%!), ToMe for SD still produces images close to the originals, while being _**2x** faster_ and using _**~5.7x** less memory_. Moreover, ToMe is not another efficient reimplementation of transformer modules. Instead, it actually _reduces_ the total work necessary to generate an image, so it can function _in conjunction_ with efficient implementations (see [Usage](#tome--xformers--flash-attn--torch-20)).
 
 ## News
- - **[2023.04.02]** ToMe for SD is now available via pip as `tomesd`. Thanks @mkshing!
+ - **[2023.04.02]** ToMe for SD is now available via pip as [tomesd](https://pypi.org/project/tomesd/). Thanks @mkshing!
  - **[2023.03.31]** ToMe for SD now supports [Diffusers](https://github.com/huggingface/diffusers). Thanks @JunnYu and @ExponentialML!
  - **[2023.03.30]** Initial release.
 
