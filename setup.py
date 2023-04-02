@@ -8,4 +8,7 @@ setup(
     description="Token Merging for Stable Diffusion",
     install_requires=["torch"],
     packages=find_packages(exclude=("examples", "build")),
+    license = 'MIT',
+    long_description=open("README.md", "r", encoding="utf-8").read(),
+    long_description_content_type="text/markdown",
 )
