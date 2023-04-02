@@ -2,7 +2,7 @@
 
 Using nothing but pure python and pytorch, ToMe for SD speeds up diffusion by merging _redundant_ tokens.
 
-![ToMe for SD applied on a 2048x2048 image.](examples/assets/teaser.jpg)
+![ToMe for SD applied on a 2048x2048 image.](https://raw.githubusercontent.com/dbolya/tomesd/main/examples/assets/teaser.jpg)
 
 This is the official implementation of **ToMe for SD** from our short paper:  
 **[Token Merging for Fast Stable Diffusion](https://arxiv.org/abs/2303.17604)**  
@@ -23,7 +23,7 @@ _[ICLR '23 Oral (Top 5%)](https://openreview.net/forum?id=JroZRaRw7Eu)_ | _[GitH
 
 
 ## What is ToMe for SD?
-![A diffusion block with ToMe applied and the resulting images at different merge ratios.](examples/assets/method.jpg)
+![A diffusion block with ToMe applied and the resulting images at different merge ratios.](https://raw.githubusercontent.com/dbolya/tomesd/main/examples/assets/method.jpg)
 
 Token Merging (**ToMe**) speeds up transformers by _merging redundant tokens_, which means the transformer has to do _less work_. We apply this to the underlying transformer blocks in Stable Diffusion in a clever way that minimizes quality loss while keeping most of the speed-up and memory benefits. ToMe for SD _doesn't_ require training and should work out of the box for any Stable Diffusion model.
 
@@ -42,6 +42,7 @@ Token Merging (**ToMe**) speeds up transformers by _merging redundant tokens_, w
 Even with more than half of the tokens merged (60%!), ToMe for SD still produces images close to the originals, while being _**2x** faster_ and using _**~5.7x** less memory_. Moreover, ToMe is not another efficient reimplementation of transformer modules. Instead, it actually _reduces_ the total work necessary to generate an image, so it can function _in conjunction_ with efficient implementations (see [Usage](#tome--xformers--flash-attn--torch-20)).
 
 ## News
+ - **[2023.04.02]** ToMe for SD is now available via pip as `tomesd`. Thanks @mkshing!
  - **[2023.03.31]** ToMe for SD now supports [Diffusers](https://github.com/huggingface/diffusers). Thanks @JunnYu and @ExponentialML!
  - **[2023.03.30]** Initial release.
 
@@ -62,11 +63,14 @@ This repo includes code to patch an existing Stable Diffusion environment. Curre
 
 ## Installation
 
-This repo is completely independent from the original ToMe and has no dependencies of its own except for ``pytorch >= 1.12.1`` (for `scatter_reduce`), which you can get from [here](https://pytorch.org/get-started/locally/).
+ToMe for SD requires ``pytorch >= 1.12.1`` (for `scatter_reduce`), which you can get from [here](https://pytorch.org/get-started/locally/). Then after installing your choice of stable diffusion environment ([supported environments](#supported-environments)), use the corresponding python environment to install ToMe for SD:
 
-To get started, install your choice of stable diffusion environment ([supported environments](#supported-environments)). Use the corresponding python environment to install ToMe for SD.
+```bash
+pip install tomesd
+```
 
-Clone the repository:
+### Installing from source
+If you'd like to install from source to get the latest updates, clone the repository:
 ```bash
 git clone https://github.com/dbolya/tomesd
 cd tomesd

@@ -122,3 +122,5 @@ work
 /test_proxy
 .dmypy.json
 
+# local files
+build.sh
