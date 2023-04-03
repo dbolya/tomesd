@@ -8,7 +8,11 @@ def do_nothing(x: torch.Tensor, mode:str=None):
 
 def mps_gather_workaround(input, dim, index):
     if input.shape[-1] == 1:
-        return torch.gather(input.unsqueeze(-1), dim - 1 if dim < 0 else dim, index.unsqueeze(-1)).squeeze(-1)
+        return torch.gather(
+            input.unsqueeze(-1),
+            dim - 1 if dim < 0 else dim,
+            index.unsqueeze(-1)
+        ).squeeze(-1)
     else:
         return torch.gather(input, dim, index)
 
@@ -34,10 +38,7 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
     if r <= 0:
         return do_nothing, do_nothing
 
-    if metric.device.type == 'mps':
-        gather = mps_gather_workaround
-    else:
-        gather = torch.gather
+    gather = mps_gather_workaround if metric.device.type == "mps" else torch.gather
     
     with torch.no_grad():
         
