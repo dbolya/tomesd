@@ -6,6 +6,13 @@ def do_nothing(x: torch.Tensor, mode:str=None):
     return x
 
 
+def mps_gather_workaround(input, dim, index):
+    if input.shape[-1] == 1:
+        return torch.gather(input.unsqueeze(-1), dim - 1 if dim < 0 else dim, index.unsqueeze(-1)).squeeze(-1)
+    else:
+        return torch.gather(input, dim, index)
+
+
 def bipartite_soft_matching_random2d(metric: torch.Tensor,
                                      w: int, h: int, sx: int, sy: int, r: int,
                                      no_rand: bool = False) -> Tuple[Callable, Callable]:
@@ -26,6 +33,11 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
 
     if r <= 0:
         return do_nothing, do_nothing
+
+    if metric.device.type == 'mps':
+        gather = mps_gather_workaround
+    else:
+        gather = torch.gather
     
     with torch.no_grad():
         
@@ -62,8 +74,8 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
 
         def split(x):
             C = x.shape[-1]
-            src = x.gather(dim=1, index=a_idx.expand(B, N - num_dst, C))
-            dst = x.gather(dim=1, index=b_idx.expand(B, num_dst, C))
+            src = gather(x, dim=1, index=a_idx.expand(B, N - num_dst, C))
+            dst = gather(x, dim=1, index=b_idx.expand(B, num_dst, C))
             return src, dst
 
         # Cosine similarity between A and B
@@ -80,14 +92,14 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
 
         unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
         src_idx = edge_idx[..., :r, :]  # Merged Tokens
-        dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
+        dst_idx = gather(node_idx[..., None], dim=-2, index=src_idx)
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
         src, dst = split(x)
         n, t1, c = src.shape
         
-        unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
-        src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
+        unm = gather(src, dim=-2, index=unm_idx.expand(n, t1 - r, c))
+        src = gather(src, dim=-2, index=src_idx.expand(n, r, c))
         dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
 
         return torch.cat([unm, dst], dim=1)
@@ -97,13 +109,13 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
         unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
         _, _, c = unm.shape
 
-        src = dst.gather(dim=-2, index=dst_idx.expand(B, r, c))
+        src = gather(dst, dim=-2, index=dst_idx.expand(B, r, c))
 
         # Combine back to the original shape
         out = torch.zeros(B, N, c, device=x.device, dtype=x.dtype)
         out.scatter_(dim=-2, index=b_idx.expand(B, num_dst, c), src=dst)
-        out.scatter_(dim=-2, index=a_idx.expand(B, a_idx.shape[1], 1).gather(dim=1, index=unm_idx).expand(B, unm_len, c), src=unm)
-        out.scatter_(dim=-2, index=a_idx.expand(B, a_idx.shape[1], 1).gather(dim=1, index=src_idx).expand(B, r, c), src=src)
+        out.scatter_(dim=-2, index=gather(a_idx.expand(B, a_idx.shape[1], 1), dim=1, index=unm_idx).expand(B, unm_len, c), src=unm)
+        out.scatter_(dim=-2, index=gather(a_idx.expand(B, a_idx.shape[1], 1), dim=1, index=src_idx).expand(B, r, c), src=src)
 
         return out
 
