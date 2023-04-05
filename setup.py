@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="tomesd",
-    version="0.1.2.dev0",
+    version="0.1.2",
     author="Daniel Bolya",
     url="https://github.com/dbolya/tomesd",
     description="Token Merging for Stable Diffusion",
