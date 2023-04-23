@@ -18,10 +18,12 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
         w = int(math.ceil(original_w / downsample))
         h = int(math.ceil(original_h / downsample))
         r = int(x.shape[1] * args["ratio"])
-        # If the batch size is odd, then it's not possible for promted and unprompted images to be in the same
+        # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, not use_rand)
+        rand_seed = None if x.shape[0] % 2 == 1 else args["rand_seed"]
+        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, 
+                                                      no_rand=not use_rand, rand_seed=rand_seed)
     else:
         m, u = (merge.do_nothing, merge.do_nothing)
 
@@ -176,6 +178,7 @@ def apply_patch(
         max_downsample: int = 1,
         sx: int = 2, sy: int = 2,
         use_rand: bool = True,
+        rand_seed: int = None,
         merge_attn: bool = True,
         merge_crossattn: bool = False,
         merge_mlp: bool = False):
@@ -224,6 +227,7 @@ def apply_patch(
             "max_downsample": max_downsample,
             "sx": sx, "sy": sy,
             "use_rand": use_rand,
+            "rand_seed": rand_seed,
             "merge_attn": merge_attn,
             "merge_crossattn": merge_crossattn,
             "merge_mlp": merge_mlp
