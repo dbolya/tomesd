@@ -7,7 +7,7 @@ from .utils import isinstance_str
 
 
 
-def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any], tome_generator: torch.Generator = None) -> Tuple[Callable, ...]:
+def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable, ...]:
     original_h, original_w = tome_info["size"]
     original_tokens = original_h * original_w
     downsample = int(math.ceil(math.sqrt(original_tokens // x.shape[1])))
@@ -21,8 +21,8 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any], tome_generator: to
         # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        generator = None if x.shape[0] % 2 == 1 else tome_generator
-        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r,
+        generator = None if x.shape[0] % 2 == 1 else args["generator"]
+        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, 
                                                       no_rand=not use_rand, generator=generator)
     else:
         m, u = (merge.do_nothing, merge.do_nothing)
@@ -50,7 +50,7 @@ def make_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]
         _parent = block_class
 
         def _forward(self, x: torch.Tensor, context: torch.Tensor = None) -> torch.Tensor:
-            m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(x, self._tome_info, self._tome_generator)
+            m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(x, self._tome_info)
 
             # This is where the meat of the computation happens
             x = u_a(self.attn1(m_a(self.norm1(x)), context=context if self.disable_self_attn else None)) + x
@@ -86,7 +86,7 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
             class_labels=None,
         ) -> torch.Tensor:
             # (1) ToMe
-            m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(hidden_states, self._tome_info, self._tome_generator)
+            m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(hidden_states, self._tome_info)
 
             if self.use_ada_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states, timestep)
@@ -219,6 +219,11 @@ def apply_patch(
         # Supports "pipe.unet" and "unet"
         diffusion_model = model.unet if hasattr(model, "unet") else model
 
+    generator = None
+    if rand_seed is not None:
+        generator = torch.Generator(device=diffusion_model.device)
+        generator = generator.manual_seed(rand_seed)
+
     diffusion_model._tome_info = {
         "size": None,
         "hooks": [],
@@ -227,6 +232,7 @@ def apply_patch(
             "max_downsample": max_downsample,
             "sx": sx, "sy": sy,
             "use_rand": use_rand,
+            "generator": generator,
             "merge_attn": merge_attn,
             "merge_crossattn": merge_crossattn,
             "merge_mlp": merge_mlp
@@ -234,19 +240,12 @@ def apply_patch(
     }
     hook_tome_model(diffusion_model)
 
-    layer_ctr = 0
     for _, module in diffusion_model.named_modules():
         # If for some reason this has a different name, create an issue and I'll fix it
         if isinstance_str(module, "BasicTransformerBlock"):
             make_tome_block_fn = make_diffusers_tome_block if is_diffusers else make_tome_block
             module.__class__ = make_tome_block_fn(module.__class__)
             module._tome_info = diffusion_model._tome_info
-            if rand_seed is not None:
-                module._tome_generator = torch.Generator(device=diffusion_model.device)
-                module._tome_generator = module._tome_generator.manual_seed(rand_seed + layer_ctr)
-                layer_ctr += 1
-            else:
-                module._tome_generator = None
 
             # Something introduced in SD 2.0 (LDM only)
             if not hasattr(module, "disable_self_attn") and not is_diffusers:
