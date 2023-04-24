@@ -21,9 +21,9 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
         # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        rand_seed = None if x.shape[0] % 2 == 1 else args["rand_seed"]
+        generator = None if x.shape[0] % 2 == 1 else args["generator"]
         m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, 
-                                                      no_rand=not use_rand, rand_seed=rand_seed)
+                                                      no_rand=not use_rand, generator=generator)
     else:
         m, u = (merge.do_nothing, merge.do_nothing)
 
@@ -227,7 +227,7 @@ def apply_patch(
             "max_downsample": max_downsample,
             "sx": sx, "sy": sy,
             "use_rand": use_rand,
-            "rand_seed": rand_seed,
+            "generator": None,
             "merge_attn": merge_attn,
             "merge_crossattn": merge_crossattn,
             "merge_mlp": merge_mlp
@@ -235,12 +235,17 @@ def apply_patch(
     }
     hook_tome_model(diffusion_model)
 
+    layer_ctr = 0
     for _, module in diffusion_model.named_modules():
         # If for some reason this has a different name, create an issue and I'll fix it
         if isinstance_str(module, "BasicTransformerBlock"):
             make_tome_block_fn = make_diffusers_tome_block if is_diffusers else make_tome_block
             module.__class__ = make_tome_block_fn(module.__class__)
             module._tome_info = diffusion_model._tome_info
+            if rand_seed is not None:
+                module._tome_info["args"]["generator"] = torch.Generator(device=diffusion_model.device)
+                module._tome_info["args"]["generator"] = module._tome_info["args"]["generator"].manual_seed(rand_seed + layer_ctr)
+                layer_ctr += 1
 
             # Something introduced in SD 2.0 (LDM only)
             if not hasattr(module, "disable_self_attn") and not is_diffusers:

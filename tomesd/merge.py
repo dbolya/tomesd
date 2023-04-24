@@ -20,7 +20,7 @@ def mps_gather_workaround(input, dim, index):
 def bipartite_soft_matching_random2d(metric: torch.Tensor,
                                      w: int, h: int, sx: int, sy: int, r: int,
                                      no_rand: bool = False,
-                                     rand_seed: int = None) -> Tuple[Callable, Callable]:
+                                     generator: torch.Generator = None) -> Tuple[Callable, Callable]:
     """
     Partitions the tokens into src and dst and merges r tokens from src to dst.
     Dst tokens are partitioned by choosing one randomy in each (sx, sy) region.
@@ -50,11 +50,7 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
         if no_rand:
             rand_idx = torch.zeros(hsy, wsx, 1, device=metric.device, dtype=torch.int64)
         else:
-            gen = None
-            if rand_seed is not None:
-                gen = torch.Generator(device=metric.device)
-                gen = gen.manual_seed(rand_seed)
-            rand_idx = torch.randint(sy*sx, size=(hsy, wsx, 1), device=metric.device, generator=gen)
+            rand_idx = torch.randint(sy*sx, size=(hsy, wsx, 1), device=metric.device, generator=generator)
         
         # The image might not divide sx and sy, so we need to work on a view of the top left if the idx buffer instead
         idx_buffer_view = torch.zeros(hsy, wsx, sy*sx, device=metric.device, dtype=torch.int64)
