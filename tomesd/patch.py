@@ -7,6 +7,20 @@ from .utils import isinstance_str
 
 
 
+def init_generator(device: torch.device):
+    """
+    Forks the current default random generator given device.
+    """
+    if device.type == "cpu":
+        return torch.Generator(device=device).set_state(torch.get_rng_state())
+    elif device.type == "cuda":
+        return torch.Generator(device=device).set_state(torch.cuda.get_rng_state())
+    elif device.type == "mps":
+        return torch.Generator(device=device).set_state(torch.mps.get_rng_state())
+    raise NotImplementedError(f"Invalid/unsupported device. Expected `cpu`, `cuda`, or `mps`, got {device.type}.")
+
+
+
 def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable, ...]:
     original_h, original_w = tome_info["size"]
     original_tokens = original_h * original_w
@@ -18,10 +32,14 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
         w = int(math.ceil(original_w / downsample))
         h = int(math.ceil(original_h / downsample))
         r = int(x.shape[1] * args["ratio"])
-        # If the batch size is odd, then it's not possible for promted and unprompted images to be in the same
+        # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
+        if args["generator"] is None or args["generator"].device != x.device:
+            args["generator"] = init_generator(x.device)
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, not use_rand)
+        generator = None if x.shape[0] % 2 == 1 else args["generator"]
+        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, 
+                                                      no_rand=not use_rand, generator=generator)
     else:
         m, u = (merge.do_nothing, merge.do_nothing)
 
@@ -224,6 +242,7 @@ def apply_patch(
             "max_downsample": max_downsample,
             "sx": sx, "sy": sy,
             "use_rand": use_rand,
+            "generator": None,
             "merge_attn": merge_attn,
             "merge_crossattn": merge_crossattn,
             "merge_mlp": merge_mlp
