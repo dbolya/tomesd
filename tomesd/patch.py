@@ -70,7 +70,20 @@ def make_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]
     return ToMeBlock
 
 
+def merge_wavg(
+    merge: Callable, x: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Applies the merge function by taking a weighted average based on token size.
+    Returns the merged tensor and the new token sizes.
+    """
+    size = torch.ones_like(x[..., 0, None])
 
+    x = merge(x * size, mode="sum")
+    size = merge(size, mode="sum")
+
+    x = x / size
+    return x
 
 
 
@@ -106,7 +119,8 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
                 norm_hidden_states = self.norm1(hidden_states)
 
             # (2) ToMe m_a
-            norm_hidden_states = m_a(norm_hidden_states)
+            norm_hidden_states = merge_wavg(m_a, norm_hidden_states)
+            #norm_hidden_states = m_a(norm_hidden_states)
 
             # 1. Self-Attention
             cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
@@ -127,7 +141,8 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
                     self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
                 )
                 # (4) ToMe m_c
-                norm_hidden_states = m_c(norm_hidden_states)
+                norm_hidden_states = merge_wavg(m_c, norm_hidden_states)
+                #norm_hidden_states = m_c(norm_hidden_states)
 
                 # 2. Cross-Attention
                 attn_output = self.attn2(
@@ -146,7 +161,8 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
                 norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
 
             # (6) ToMe m_m
-            norm_hidden_states = m_m(norm_hidden_states)
+            norm_hidden_states = merge_wavg(m_m, norm_hidden_states)
+            #norm_hidden_states = m_m(norm_hidden_states)
 
             ff_output = self.ff(norm_hidden_states)
 
@@ -160,11 +176,6 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
 
     return ToMeBlock
 
-
-
-
-
-
 def hook_tome_model(model: torch.nn.Module):
     """ Adds a forward pre hook to get the image size. This hook can be removed with remove_patch. """
     def hook(module, args):
@@ -172,11 +183,6 @@ def hook_tome_model(model: torch.nn.Module):
         return None
 
     model._tome_info["hooks"].append(model.register_forward_pre_hook(hook))
-
-
-
-
-
 
 
 
@@ -228,6 +234,7 @@ def apply_patch(
 
     diffusion_model._tome_info = {
         "size": None,
+        "hsize": None,
         "hooks": [],
         "args": {
             "ratio": ratio,
