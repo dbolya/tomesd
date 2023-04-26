@@ -49,7 +49,7 @@ def bipartite_soft_matching_random2d(metric: torch.Tensor,
         if no_rand:
             rand_idx = torch.zeros(hsy, wsx, 1, device=metric.device, dtype=torch.int64)
         else:
-            rand_idx = torch.randint(sy*sx, size=(hsy, wsx, 1), device=metric.device, generator=generator)
+            rand_idx = torch.randint(sy*sx, size=(hsy, wsx, 1), device=generator.device, generator=generator).to(metric.device)
         
         # The image might not divide sx and sy, so we need to work on a view of the top left if the idx buffer instead
         idx_buffer_view = torch.zeros(hsy, wsx, sy*sx, device=metric.device, dtype=torch.int64)
