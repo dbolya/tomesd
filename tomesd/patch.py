@@ -3,21 +3,7 @@ import math
 from typing import Type, Dict, Any, Tuple, Callable
 
 from . import merge
-from .utils import isinstance_str
-
-
-
-def init_generator(device: torch.device):
-    """
-    Forks the current default random generator given device.
-    """
-    if device.type == "cpu":
-        return torch.Generator(device=device).set_state(torch.get_rng_state())
-    elif device.type == "cuda":
-        return torch.Generator(device=device).set_state(torch.cuda.get_rng_state())
-    elif device.type == "mps":
-        return torch.Generator(device=device).set_state(torch.mps.get_rng_state())
-    raise NotImplementedError(f"Invalid/unsupported device. Expected `cpu`, `cuda`, or `mps`, got {device.type}.")
+from .utils import isinstance_str, init_generator
 
 
 
@@ -32,14 +18,20 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
         w = int(math.ceil(original_w / downsample))
         h = int(math.ceil(original_h / downsample))
         r = int(x.shape[1] * args["ratio"])
+
+        # Re-init the generator if it hasn't already been initialized or device has changed.
+        if args["generator"] is None:
+            args["generator"] = init_generator(x.device)
+        elif args["generator"].device != x.device:
+            # MPS can use a cpu generator
+            if not (args["generator"].device.type == "cpu" and x.device.type == "mps"):
+                args["generator"] = init_generator(x.device)
+        
         # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
-        if args["generator"] is None or args["generator"].device != x.device:
-            args["generator"] = init_generator(x.device)
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        generator = None if x.shape[0] % 2 == 1 else args["generator"]
         m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, 
-                                                      no_rand=not use_rand, generator=generator)
+                                                      no_rand=not use_rand, generator=args["generator"])
     else:
         m, u = (merge.do_nothing, merge.do_nothing)
 
