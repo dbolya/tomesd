@@ -15,23 +15,12 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
     args = tome_info["args"]
 
     if downsample <= args["max_downsample"]:
-        w = int(math.ceil(original_w / downsample))
-        h = int(math.ceil(original_h / downsample))
         r = int(x.shape[1] * args["ratio"])
-
-        # Re-init the generator if it hasn't already been initialized or device has changed.
-        if args["generator"] is None:
-            args["generator"] = init_generator(x.device)
-        elif args["generator"].device != x.device:
-            # MPS can use a cpu generator
-            if not (args["generator"].device.type == "cpu" and x.device.type == "mps"):
-                args["generator"] = init_generator(x.device)
         
         # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, 
-                                                      no_rand=not use_rand, generator=args["generator"])
+        m, u = merge.bipartite_soft_matching_random2d(x, r)
     else:
         m, u = (merge.do_nothing, merge.do_nothing)
 
@@ -40,11 +29,6 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
     m_m, u_m = (m, u) if args["merge_mlp"]       else (merge.do_nothing, merge.do_nothing)
 
     return m_a, m_c, m_m, u_a, u_c, u_m  # Okay this is probably not very good
-
-
-
-
-
 
 
 def make_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]:
@@ -86,7 +70,6 @@ def merge_wavg(
     return x
 
 
-
 def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]:
     """
     Make a patched class for a diffusers model.
@@ -120,7 +103,6 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
 
             # (2) ToMe m_a
             norm_hidden_states = merge_wavg(m_a, norm_hidden_states)
-            #norm_hidden_states = m_a(norm_hidden_states)
 
             # 1. Self-Attention
             cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
@@ -142,7 +124,6 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
                 )
                 # (4) ToMe m_c
                 norm_hidden_states = merge_wavg(m_c, norm_hidden_states)
-                #norm_hidden_states = m_c(norm_hidden_states)
 
                 # 2. Cross-Attention
                 attn_output = self.attn2(
@@ -162,7 +143,6 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
 
             # (6) ToMe m_m
             norm_hidden_states = merge_wavg(m_m, norm_hidden_states)
-            #norm_hidden_states = m_m(norm_hidden_states)
 
             ff_output = self.ff(norm_hidden_states)
 
@@ -234,7 +214,6 @@ def apply_patch(
 
     diffusion_model._tome_info = {
         "size": None,
-        "hsize": None,
         "hooks": [],
         "args": {
             "ratio": ratio,
@@ -261,9 +240,6 @@ def apply_patch(
                 module.disable_self_attn = False
 
     return model
-
-
-
 
 
 def remove_patch(model: torch.nn.Module):
