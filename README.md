@@ -30,20 +30,6 @@ pip install git+https://github.com/AlexKoff88/tomesd.git
 ```
 
 ## Usage
-Apply ToMe for SD to any Stable Diffusion model with
-```py
-import tomesd
-
-# Patch a Stable Diffusion model with ToMe for SD using a 50% merging ratio.
-# Using the default options are recommended for the highest quality, tune ratio to suit your needs.
-tomesd.apply_patch(model, ratio=0.5)
-```
-See above for what speeds and memory savings you can expect with different ratios.
-If you want to remove the patch later, simply use `tomesd.remove_patch(model)`.
-
-### Example
-
-#### Diffusers
 ToMe can also be used to patch a 🤗 Diffusers Stable Diffusion pipeline:
 ```py
 import torch, tomeov
