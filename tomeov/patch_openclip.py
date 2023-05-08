@@ -175,8 +175,8 @@ class ToMeResidualAttentionBlock(nn.Module):
         
         x = q_x + self.ls_1(x_attn)
         
-        r = int(q_x.shape[1] * self._tome_info["ratio"]) #self._tome_info["r"].pop(0)
-        print("r: ", r)
+        r = int(q_x.shape[1] * self._tome_info["ratio"]) if q_x.shape[1] >= 32 else 0 #self._tome_info["r"].pop(0)
+        #print(f"r: {r}, q_x.shape: {q_x.shape}")
         if r > 0:
             # Apply ToMe here
             merge, _ = bipartite_soft_matching(
@@ -330,7 +330,7 @@ def apply_openclip_patch(
     ToMeVisionTransformer = make_tome_class(model.__class__)
 
     model.__class__ = ToMeVisionTransformer
-    model.r = 0
+    model.r = ratio
     model._tome_info = {
         "ratio": ratio,
         "r": model.r,
