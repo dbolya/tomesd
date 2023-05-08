@@ -132,76 +132,51 @@ class ToMeResidualAttentionBlock(nn.Module):
      - Apply ToMe between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
-    def __init__(
-            self,
-            d_model: int,
-            n_head: int,
-            mlp_ratio: float = 4.0,
-            ls_init_value: float = None,
-            act_layer: Callable = torch.nn.GELU,
-            norm_layer: Callable = LayerNorm,
-            is_cross_attention: bool = False,
-    ):
-        super().__init__()
+    # def __init__(
+    #         self,
+    #         d_model: int,
+    #         n_head: int,
+    #         mlp_ratio: float = 4.0,
+    #         ls_init_value: float = None,
+    #         act_layer: Callable = torch.nn.GELU,
+    #         norm_layer: Callable = LayerNorm,
+    #         is_cross_attention: bool = False,
+    # ):
+    #     super().__init__()
         
-        self.ln_1 = norm_layer(d_model)
-        self.attn = ToMeAttention(dim=d_model, num_heads=n_head, qkv_bias=True)
-        self.ls_1 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
-        if is_cross_attention:
-            self.ln_1_kv = norm_layer(d_model)
+    #     self.ln_1 = norm_layer(d_model)
+    #     self.attn = ToMeAttention(dim=d_model, num_heads=n_head, qkv_bias=True)
+    #     self.ls_1 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
+    #     if is_cross_attention:
+    #         self.ln_1_kv = norm_layer(d_model)
 
-        self.ln_2 = norm_layer(d_model)
-        mlp_width = int(d_model * mlp_ratio)
-        self.mlp = nn.Sequential(OrderedDict([
-            ("c_fc", nn.Linear(d_model, mlp_width)),
-            ("gelu", act_layer()),
-            ("c_proj", nn.Linear(mlp_width, d_model))
-        ]))
-        self.ls_2 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
-        
-    
-    def attention(self,
-            x: torch.Tensor,
-            attn_mask = None
-    ):        
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-
-        attn_mask = (
-            attn_mask.to(dtype=x.dtype, device=x.device)
-            if attn_mask is not None
-            else None
-        )
-        x, metric = self.attn(x.permute(1, 0, 2), attn_size)
-
-        r = self._tome_info["r"].pop(0)
-        if r > 0:
-            # Apply ToMe here
-            merge, _ = bipartite_soft_matching(
-                metric,
-                r,
-                self._tome_info["class_token"],
-                self._tome_info["distill_token"],
-            )
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
-                )
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
-
-        x = x.permute(1, 0, 2)
-
-        return x
+    #     self.ln_2 = norm_layer(d_model)
+    #     mlp_width = int(d_model * mlp_ratio)
+    #     self.mlp = nn.Sequential(OrderedDict([
+    #         ("c_fc", nn.Linear(d_model, mlp_width)),
+    #         ("gelu", act_layer()),
+    #         ("c_proj", nn.Linear(mlp_width, d_model))
+    #     ]))
+    #     self.ls_2 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
         
 
     def forward(self, q_x: torch.Tensor,
-            attn_mask: Optional[torch.Tensor] = None):
-        q_x = q_x.permute(1, 0, 2)
+                attn_mask: Optional[torch.Tensor] = None):
+        #q_x = q_x.permute(1, 0, 2)
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         
+        
+        
         x_attn, metric = self.attn(self.ln_1(q_x), attn_size)
+        # t_x = self.ln_1(q_x)
+        
+        # x_attn, metric = self.attn(t_x.permute(1, 0, 2), attn_size)
+        # x_attn = x_attn.permute(1, 0, 2)
+        
         x = q_x + self.ls_1(x_attn)
         
-        r = self._tome_info["r"].pop(0)
+        r = int(q_x.shape[1] * self._tome_info["ratio"]) #self._tome_info["r"].pop(0)
+        print("r: ", r)
         if r > 0:
             # Apply ToMe here
             merge, _ = bipartite_soft_matching(
@@ -217,7 +192,7 @@ class ToMeResidualAttentionBlock(nn.Module):
             x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
         x = x + self.ls_2(self.mlp(self.ln_2(x)))
-        return x.permute(1, 0, 2)
+        return x#.permute(1, 0, 2)
 
 
 class ToMeAttention(Attention):
@@ -229,7 +204,8 @@ class ToMeAttention(Attention):
 
     def forward(
         self, x: torch.Tensor, 
-        size: torch.Tensor = None
+        size: torch.Tensor = None,
+        attn_mask: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Note: this is copied from timm.models.vision_transformer.Attention with modifications.
         B, N, C = x.shape
@@ -289,14 +265,56 @@ def make_tome_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
 
-        def forward(self, *args, **kwdargs) -> torch.Tensor:
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
             self._tome_info["r"] = parse_r(len(self.transformer.resblocks), self.r)
             self._tome_info["size"] = None
             self._tome_info["source"] = None
 
-            return super().forward(*args, **kwdargs)
+            # to patches - whether to use dual patchnorm - https://arxiv.org/abs/2302.01327v1
+            if self.input_patchnorm:
+                # einops - rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)')
+                x = x.reshape(x.shape[0], x.shape[1], self.grid_size[0], self.patch_size[0], self.grid_size[1], self.patch_size[1])
+                x = x.permute(0, 2, 4, 1, 3, 5)
+                x = x.reshape(x.shape[0], self.grid_size[0] * self.grid_size[1], -1)
+                x = self.patchnorm_pre_ln(x)
+                x = self.conv1(x)
+            else:
+                x = self.conv1(x)  # shape = [*, width, grid, grid]
+                x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+                x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+
+            # class embeddings and positional embeddings
+            x = torch.cat(
+                [self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device),
+                x], dim=1)  # shape = [*, grid ** 2 + 1, width]
+            x = x + self.positional_embedding.to(x.dtype)
+
+            # a patch_dropout of 0. would mean it is disabled and this function would do nothing but return what was passed in
+            x = self.patch_dropout(x)
+            x = self.ln_pre(x)
+
+            x = self.transformer(x)
+
+            if self.attn_pool is not None:
+                x = self.attn_pool(x)
+                x = self.ln_post(x)
+                pooled, tokens = self._global_pool(x)
+            else:
+                pooled, tokens = self._global_pool(x)
+                pooled = self.ln_post(pooled)
+
+            if self.proj is not None:
+                pooled = pooled @ self.proj
+
+            if self.output_tokens:
+                return pooled, tokens
+            
+            return pooled
 
     return ToMeVisionTransformer
+
+
+
 
 
 def apply_openclip_patch(
@@ -312,8 +330,9 @@ def apply_openclip_patch(
     ToMeVisionTransformer = make_tome_class(model.__class__)
 
     model.__class__ = ToMeVisionTransformer
-    model.r = ratio
+    model.r = 0
     model._tome_info = {
+        "ratio": ratio,
         "r": model.r,
         "size": None,
         "source": None,
@@ -326,11 +345,11 @@ def apply_openclip_patch(
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
-    for i, resblock in enumerate(model.transformer.resblocks):
-        tome_module = ToMeResidualAttentionBlock(
-            resblock.attn.embed_dim, resblock.attn.num_heads
-        )
-        _, device = convert_attention_block(resblock.attn, tome_module.attn)
-        tome_module._tome_info = model._tome_info
-        tome_module = tome_module.to(device)
-        model.transformer.resblocks[i] = tome_module
+    for i, resblock in enumerate(model.transformer.resblocks):     
+        resblock.__class__ = ToMeResidualAttentionBlock
+        resblock._tome_info = model._tome_info
+        attn = ToMeAttention(resblock.attn.embed_dim, resblock.attn.num_heads, qkv_bias=True)
+        _, device = convert_attention_block(resblock.attn, attn)
+        attn = attn.to(device)
+        resblock.attn = attn
+        
