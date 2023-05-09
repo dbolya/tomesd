@@ -1,6 +1,11 @@
 # Token Merging for Stable Diffusion running with OpenVINO
 
-This is an OpenVINO adoped version of Token Merging method for Stable Diffusion. The method is applied to PyTorch model before exporting to OpenVINO representation. It can be also stacked with 8-bit quantization to achieve a higher inference speed. See details and example in the [Optimum-Intel](https://github.com/huggingface/optimum-intel/tree/main/examples/openvino/stable-diffusion).
+This is an OpenVINO adoped version of Token Merging method. The method is applied to PyTorch model before exporting to OpenVINO representation. It can be also stacked with 8-bit quantization to achieve a higher inference speed. 
+The repository contains implementation for:
+- Stable Diffusion (HF Diffusers based models), see (example)[(https://github.com/huggingface/optimum-intel/tree/main/examples/openvino/stable-diffusion].
+- OpenCLIP, see [example](https://github.com/AlexKoff88/open_clip/blob/openvino_alt/tutorials/openvino/openvino_tome.ipynb).
+- Timm
+
 
 Here are the results for 100 iteration of 512x512 image generation on CPU.
 ![ToMe for SD applied on a 512x512 image.](examples/assets/tome_results.png)
@@ -12,25 +17,18 @@ ToMe for SD is an extension of the original **ToMe**:
 **[Token Merging: Your ViT but Faster](https://arxiv.org/abs/2210.09461)**  
 
 
-## Supported Environments
-
-This repo includes code to patch an existing Stable Diffusion environment. Currently, we support the following implementations:
- - [x] [Diffusers](https://github.com/huggingface/diffusers)
- - [ ] And potentially others
-
 **Note:** This also supports most downstream UIs that use these repositories.
-
 
 ## Installation
 
 ToMe for SD requires ``pytorch >= 1.12.1`` (for `scatter_reduce`), which you can get from [here](https://pytorch.org/get-started/locally/). Then after installing your choice of stable diffusion environment ([supported environments](#supported-environments)), use the corresponding python environment to install ToMe for SD:
 
 ```bash
-pip install git+https://github.com/AlexKoff88/tomesd.git
+pip install git+https://github.com/AlexKoff88/tomesd.git@openvino_clip
 ```
 
 ## Usage
-ToMe can also be used to patch a 🤗 Diffusers Stable Diffusion pipeline:
+* Diffusers:
 ```py
 import torch, tomeov
 from diffusers import StableDiffusionPipeline
@@ -39,14 +37,15 @@ pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
 
 save_dir = "stable_diffusion_optimized"
 # Apply ToMe with a 50% merging ratio
-tomeov.apply_patch(pipe, ratio=0.5) # Can also use pipe.unet in place of pipe here
-tomeov.export_diffusion_pipeline(save_dir)
-
-ov_pipe = OVStableDiffusionPipeline.from_pretrained(save_dir, compile=False)
-ov_pipe.reshape(batch_size=1, height=512, width=512, num_images_per_prompt=1)
-ov_pipe.compile()
-
-image = pipe("a photo of an astronaut riding a horse on mars").images[0]
-image.save("astronaut.png")
+tomeov.patch_stable_diffusion(pipe, ratio=0.5) # Can also use pipe.unet in place of pipe here
 ```
-You can remove the patch with `tomesd.remove_patch(pipe)`.
+* OpenCLIP:
+```py
+import torch, tomeov
+import open_clip
+from open_clip import tokenizer
+
+model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-16-plus-240", pretrained="laion400m_e32")
+
+tomeov.patch_openclip(model, 24) # 24 - number of tokens merged in each MHSA top down
+```

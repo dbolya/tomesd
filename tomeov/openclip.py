@@ -32,7 +32,7 @@ class ToMeResidualAttentionBlock(nn.Module):
         # r += (q_x.shape[1] - r) % alignment
         #r = 0 if q_x.shape[1] - r < min_token_num else r
         # self._tome_info["r"] = self._tome_info["r"] * ratio_decay
-        print(f"ratio: {self._tome_info['ratio']},r: {r}, q_x.shape[1]: {q_x.shape[1]}")
+        #print(f"ratio: {self._tome_info['ratio']},r: {r}, q_x.shape[1]: {q_x.shape[1]}")
 
         if r > 0:
             # Apply ToMe here
