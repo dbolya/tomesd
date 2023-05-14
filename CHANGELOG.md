@@ -18,3 +18,5 @@
  ## v0.1.3
   - **[2023.04.24]** Random perturbations now use a separate rng so it doesn't affect the rest of the diffusion process. Thanks @alihassanijr!
   - **[2023.04.25]** Fixed an issue with the separate rng on mps devices. (Fixes #27)
+  - **[2023.05.14]** Added fallback to CPU for non-supported devices for the separate rng generator.
+  - **[2023.05.14]** Defined `use_ada_layer_norm_zero` just in case for older diffuser versions. (Fixes #20)

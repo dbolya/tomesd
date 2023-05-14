@@ -23,9 +23,7 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
         if args["generator"] is None:
             args["generator"] = init_generator(x.device)
         elif args["generator"].device != x.device:
-            # MPS can use a cpu generator
-            if not (args["generator"].device.type == "cpu" and x.device.type == "mps"):
-                args["generator"] = init_generator(x.device)
+            args["generator"] = init_generator(x.device, fallback=args["generator"])
         
         # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
@@ -252,6 +250,11 @@ def apply_patch(
             # Something introduced in SD 2.0 (LDM only)
             if not hasattr(module, "disable_self_attn") and not is_diffusers:
                 module.disable_self_attn = False
+
+            # Something needed for older versions of diffusers
+            if not hasattr(module, "use_ada_layer_norm_zero") and is_diffusers:
+                module.use_ada_layer_norm = False
+                module.use_ada_layer_norm_zero = False
 
     return model
 

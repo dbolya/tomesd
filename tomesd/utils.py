@@ -16,12 +16,17 @@ def isinstance_str(x: object, cls_name: str):
     return False
 
 
-def init_generator(device: torch.device):
+def init_generator(device: torch.device, fallback: torch.Generator=None):
     """
     Forks the current default random generator given device.
     """
-    if device.type == "cpu" or device.type == "mps": # MPS can use a cpu generator
+    if device.type == "cpu":
         return torch.Generator(device="cpu").set_state(torch.get_rng_state())
     elif device.type == "cuda":
         return torch.Generator(device=device).set_state(torch.cuda.get_rng_state())
-    raise NotImplementedError(f"Invalid/unsupported device. Expected `cpu`, `cuda`, or `mps`, got {device.type}.")
+    else:
+        if fallback is None:
+            return init_generator(torch.device("cpu"))
+        else:
+            return fallback
+    
