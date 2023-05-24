@@ -44,7 +44,6 @@ class ToMeBlock(Block):
             # print(self._tome_info["size"])
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        print(x.shape)
         return x
 
 
