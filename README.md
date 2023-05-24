@@ -49,3 +49,13 @@ model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-16-plus-240"
 
 tomeov.patch_openclip(model, 24) # 24 - number of tokens merged in each MHSA top down
 ```
+* Timm:
+```py
+import torch, tomeov
+import timm
+
+model_name = 'vit_tiny_patch16_224'
+model = timm.create_model(model_name, pretrained=True)
+
+tomeov.patch_timm(model, r = 5)
+```
