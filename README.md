@@ -2,7 +2,7 @@
 
 This is an OpenVINO adoped version of Token Merging method. The method is applied to PyTorch model before exporting to OpenVINO representation. It can be also stacked with 8-bit quantization to achieve a higher inference speed. 
 The repository contains implementation for:
-- Stable Diffusion (HF Diffusers based models), see (example)[(https://github.com/huggingface/optimum-intel/tree/main/examples/openvino/stable-diffusion].
+- Stable Diffusion (HF Diffusers based models), see [example](https://github.com/huggingface/optimum-intel/tree/main/examples/openvino/stable-diffusion).
 - OpenCLIP, see [example](https://github.com/AlexKoff88/open_clip/blob/openvino_alt/tutorials/openvino/openvino_tome.ipynb).
 - Timm
 
@@ -47,7 +47,7 @@ from open_clip import tokenizer
 
 model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-16-plus-240", pretrained="laion400m_e32")
 
-tomeov.patch_openclip(model, 24) # 24 - number of tokens merged in each MHSA top down
+tomeov.patch_openclip(model, 8) # 8 - number of tokens merged in each MHSA from top down
 ```
 * Timm:
 ```py
@@ -57,5 +57,5 @@ import timm
 model_name = 'vit_tiny_patch16_224'
 model = timm.create_model(model_name, pretrained=True)
 
-tomeov.patch_timm(model, r = 5)
+tomeov.patch_timm(model, 4) # 8 - number of tokens merged in each MHSA from top down
 ```
