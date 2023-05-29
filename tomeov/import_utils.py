@@ -8,7 +8,7 @@ def is_diffusers_available():
 
 def is_openclip_available():
     try:
-        import openclip
+        import open_clip_torch
         return True
     except ImportError:
         return False

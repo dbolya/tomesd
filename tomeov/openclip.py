@@ -6,7 +6,7 @@ from torch import nn
 from .utils import isinstance_str, init_generator
 from timm.models.vision_transformer import Attention
 
-from tomeov.utils import parse_r
+from .utils import parse_r
 from .merge import merge_wavg, merge_source, bipartite_soft_matching, bipartite_soft_matching_random2d
 
 class ToMeResidualAttentionBlock(nn.Module):
@@ -23,17 +23,7 @@ class ToMeResidualAttentionBlock(nn.Module):
         x_attn, metric = self.attn(self.ln_1(q_x), attn_size)
         x = q_x + self.ls_1(x_attn)
         
-        r = self._tome_info["r"].pop(0) #int(q_x.shape[1] * self._tome_info["ratio"]) if q_x.shape[1] >= 32 else 0 #
-        # alignment = 8
-        # ratio_decay = 0.9
-        #min_token_num = 16
-        
-        # r = int(q_x.shape[1] * self._tome_info["r"])
-        # r += (q_x.shape[1] - r) % alignment
-        #r = 0 if q_x.shape[1] - r < min_token_num else r
-        # self._tome_info["r"] = self._tome_info["r"] * ratio_decay
-        #print(f"ratio: {self._tome_info['ratio']},r: {r}, q_x.shape[1]: {q_x.shape[1]}")
-
+        r = self._tome_info["r"].pop(0) 
         if r > 0:
             # Apply ToMe here
             merge, _ = bipartite_soft_matching(
@@ -62,7 +52,8 @@ class ToMeAttention(Attention):
     def forward(
         self, x: torch.Tensor, 
         size: torch.Tensor = None,
-        attn_mask: torch.Tensor = None
+        attn_mask: torch.Tensor = None,
+        need_weights = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Note: this is copied from timm.models.vision_transformer.Attention with modifications.
         B, N, C = x.shape
