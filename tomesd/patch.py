@@ -6,7 +6,6 @@ from . import merge
 from .utils import isinstance_str, init_generator
 
 
-
 def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable, ...]:
     original_h, original_w = tome_info["size"]
     original_tokens = original_h * original_w
@@ -24,25 +23,20 @@ def compute_merge(x: torch.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable,
             args["generator"] = init_generator(x.device)
         elif args["generator"].device != x.device:
             args["generator"] = init_generator(x.device, fallback=args["generator"])
-        
+
         # If the batch size is odd, then it's not possible for prompted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, 
-                                                      no_rand=not use_rand, generator=args["generator"])
+        m, u = merge.bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r,
+                                                      no_rand=not use_rand, generator=args["generator"], onnx_friendly=tome_info["onnx_friendly"])
     else:
         m, u = (merge.do_nothing, merge.do_nothing)
 
-    m_a, u_a = (m, u) if args["merge_attn"]      else (merge.do_nothing, merge.do_nothing)
+    m_a, u_a = (m, u) if args["merge_attn"] else (merge.do_nothing, merge.do_nothing)
     m_c, u_c = (m, u) if args["merge_crossattn"] else (merge.do_nothing, merge.do_nothing)
-    m_m, u_m = (m, u) if args["merge_mlp"]       else (merge.do_nothing, merge.do_nothing)
+    m_m, u_m = (m, u) if args["merge_mlp"] else (merge.do_nothing, merge.do_nothing)
 
     return m_a, m_c, m_m, u_a, u_c, u_m  # Okay this is probably not very good
-
-
-
-
-
 
 
 def make_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]:
@@ -64,12 +58,8 @@ def make_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]
             x = u_m(self.ff(m_m(self.norm3(x)))) + x
 
             return x
-    
+
     return ToMeBlock
-
-
-
-
 
 
 def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.nn.Module]:
@@ -77,19 +67,20 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
     Make a patched class for a diffusers model.
     This patch applies ToMe to the forward function of the block.
     """
+
     class ToMeBlock(block_class):
         # Save for unpatching later
         _parent = block_class
 
         def forward(
-            self,
-            hidden_states,
-            attention_mask=None,
-            encoder_hidden_states=None,
-            encoder_attention_mask=None,
-            timestep=None,
-            cross_attention_kwargs=None,
-            class_labels=None,
+                self,
+                hidden_states,
+                attention_mask=None,
+                encoder_hidden_states=None,
+                encoder_attention_mask=None,
+                timestep=None,
+                cross_attention_kwargs=None,
+                class_labels=None,
         ) -> torch.Tensor:
             # (1) ToMe
             m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(hidden_states, self._tome_info)
@@ -139,7 +130,7 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
 
             # 3. Feed-forward
             norm_hidden_states = self.norm3(hidden_states)
-            
+
             if self.use_ada_layer_norm_zero:
                 norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
 
@@ -159,23 +150,14 @@ def make_diffusers_tome_block(block_class: Type[torch.nn.Module]) -> Type[torch.
     return ToMeBlock
 
 
-
-
-
-
 def hook_tome_model(model: torch.nn.Module):
     """ Adds a forward pre hook to get the image size. This hook can be removed with remove_patch. """
+
     def hook(module, args):
         module._tome_info["size"] = (args[0].shape[2], args[0].shape[3])
         return None
 
     model._tome_info["hooks"].append(model.register_forward_pre_hook(hook))
-
-
-
-
-
-
 
 
 def apply_patch(
@@ -186,7 +168,8 @@ def apply_patch(
         use_rand: bool = True,
         merge_attn: bool = True,
         merge_crossattn: bool = False,
-        merge_mlp: bool = False):
+        merge_mlp: bool = False,
+        onnx_friendly: bool = False):
     """
     Patches a stable diffusion model with ToMe.
     Apply this to the highest level stable diffusion object (i.e., it should have a .model.diffusion_model).
@@ -208,6 +191,7 @@ def apply_patch(
      - merge_attn: Whether or not to merge tokens for attention (recommended).
      - merge_crossattn: Whether or not to merge tokens for cross attention (not recommended).
      - merge_mlp: Whether or not to merge tokens for the mlp layers (very not recommended).
+     - onnx_friendly: Whether or not to replace scatter_reduce with onnx friendly ops.
     """
 
     # Make sure the module is not currently patched
@@ -235,8 +219,9 @@ def apply_patch(
             "generator": None,
             "merge_attn": merge_attn,
             "merge_crossattn": merge_crossattn,
-            "merge_mlp": merge_mlp
-        }
+            "merge_mlp": merge_mlp,
+        },
+        "onnx_friendly": onnx_friendly
     }
     hook_tome_model(diffusion_model)
 
@@ -259,9 +244,6 @@ def apply_patch(
     return model
 
 
-
-
-
 def remove_patch(model: torch.nn.Module):
     """ Removes a patch from a ToMe Diffusion module if it was already patched. """
     # For diffusers
@@ -275,5 +257,5 @@ def remove_patch(model: torch.nn.Module):
 
         if module.__class__.__name__ == "ToMeBlock":
             module.__class__ = module._parent
-    
+
     return model
