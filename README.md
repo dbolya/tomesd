@@ -7,7 +7,7 @@ Using nothing but pure python and pytorch, ToMe for SD speeds up diffusion by me
 This is the official implementation of **ToMe for SD** from our short paper:  
 **[Token Merging for Fast Stable Diffusion](https://arxiv.org/abs/2303.17604)**  
 [Daniel Bolya](https://dbolya.github.io), [Judy Hoffman](https://faculty.cc.gatech.edu/~judy/)  
-_[GitHub](https://github.com/dbolya/tomesd)_ | _[arXiv](https://arxiv.org/abs/2303.17604)_ | _[BibTeX](#citation)_
+_[CVPR '23 ECV Workshop Oral](https://sites.google.com/view/ecv23)_ | _[GitHub](https://github.com/dbolya/tomesd)_ | _[arXiv](https://arxiv.org/abs/2303.17604)_ | _[BibTeX](#citation)_
 
 ToMe for SD is an extension of the original **ToMe**:  
 **[Token Merging: Your ViT but Faster](https://arxiv.org/abs/2210.09461)**  
@@ -42,6 +42,7 @@ Token Merging (**ToMe**) speeds up transformers by _merging redundant tokens_, w
 Even with more than half of the tokens merged (60%!), ToMe for SD still produces images close to the originals, while being _**2x** faster_ and using _**~5.7x** less memory_. Moreover, ToMe is not another efficient reimplementation of transformer modules. Instead, it actually _reduces_ the total work necessary to generate an image, so it can function _in conjunction_ with efficient implementations (see [Usage](#tome--xformers--flash-attn--torch-20)).
 
 ## News
+ - **[2023.06.19]** I'll be giving a talk at the CVPR 2023 Efficient Deep Learning for Computer Vision workshop. Come on down if you're attending CVPR!
  - **[2023.04.02]** ToMe for SD is now available via pip as [tomesd](https://pypi.org/project/tomesd/). Thanks @mkshing!
  - **[2023.03.31]** ToMe for SD now supports [Diffusers](https://github.com/huggingface/diffusers). Thanks @JunnYu and @ExponentialML!
  - **[2023.03.30]** Initial release.
@@ -136,7 +137,7 @@ If you use ToMe for SD or this codebase in your work, please cite:
 @article{bolya2023tomesd,
   title={Token Merging for Fast Stable Diffusion},
   author={Bolya, Daniel and Hoffman, Judy},
-  journal={arXiv},
+  journal={CVPR Workshop on Efficient Deep Learning for Computer Vision},
   year={2023}
 }
 ```
